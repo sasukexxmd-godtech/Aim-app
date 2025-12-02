@@ -1,0 +1,596 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<title>AimLab — Safe Aim Trainer</title>
+<style>
+  :root{
+    --bg:#0f1720; --card:#0b1220; --accent:#ff6b6b; --muted:#94a3b8; --glass: rgba(255,255,255,0.03);
+    --ui-h:56px;
+  }
+  html,body{height:100%;margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,"Helvetica Neue",Arial;}
+  body{background:
+    radial-gradient(1200px 600px at 10% 10%, rgba(255,107,107,0.04), transparent 8%),
+    radial-gradient(900px 400px at 90% 90%, rgba(79,70,229,0.03), transparent 8%),
+    var(--bg);
+    color:#e6eef8; -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+    display:flex; flex-direction:column;
+  }
+
+  header{height:var(--ui-h); display:flex; align-items:center; gap:12px; padding:8px 12px;}
+  .brand{font-weight:700; letter-spacing:0.4px}
+  .container{display:flex; gap:12px; padding:12px; flex:1; min-height:0;}
+  .left{width:340px; max-width:40%; display:flex; flex-direction:column; gap:12px;}
+  .card{background:linear-gradient(180deg,var(--card), rgba(255,255,255,0.02)); border-radius:12px; padding:12px;}
+  .canvas-wrap{flex:1; position:relative; border-radius:12px; overflow:hidden; background:linear-gradient(180deg,#081021 0%, #07101a 100%); display:flex; flex-direction:column;}
+  canvas{width:100%; height:100%; display:block; touch-action:none;}
+  label{display:block;color:var(--muted); font-size:13px;margin-bottom:6px;}
+  .row{display:flex; gap:8px; align-items:center;}
+  select,input[type=range],input[type=number]{width:100%;}
+  input[type=range]{accent-color:var(--accent);}
+  button{background:var(--accent); color:white; border:0; padding:10px 12px; border-radius:8px; cursor:pointer; font-weight:600;}
+  .muted{color:var(--muted); font-size:13px;}
+  .stats{display:flex; gap:8px; flex-wrap:wrap;}
+  .stat{background:var(--glass); padding:8px 10px; border-radius:8px; min-width:110px;}
+  .small{font-size:13px;color:var(--muted)}
+  .controls{display:flex; gap:8px; align-items:center;}
+  .topbar{display:flex; gap:8px; align-items:center; justify-content:space-between;}
+  .mode-list{display:grid; gap:8px;}
+  .mode-button{background:transparent; border:1px solid rgba(255,255,255,0.04); padding:8px;border-radius:10px; text-align:left; cursor:pointer;}
+  .mode-button.active{border-color:var(--accent); box-shadow:0 6px 20px rgba(255,107,107,0.06); background:linear-gradient(90deg, rgba(255,107,107,0.03), transparent);}
+  footer{height:44px; display:flex; align-items:center; gap:10px; padding:8px 12px; color:var(--muted); font-size:13px;}
+  @media (max-width:900px){
+    .container{flex-direction:column;}
+    .left{width:100%; max-width:100%;}
+  }
+  /* tooltip-ish small help text */
+  .hint{font-size:12px;color:var(--muted); margin-top:6px;}
+  .big-btn{font-size:18px;padding:12px 14px;border-radius:12px;}
+  .settings-grid{display:grid; grid-template-columns: 1fr 1fr; gap:8px;}
+  .center{display:flex;align-items:center;justify-content:center;}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">AimLab — Safe Aim Trainer</div>
+  <div class="muted">Practice aim, reaction, tracking — zero cheats</div>
+</header>
+
+<div class="container">
+  <div class="left">
+    <div class="card topbar">
+      <div style="flex:1">
+        <label for="mode">Mode</label>
+        <div class="mode-list" id="modeList">
+          <!-- buttons injected by JS -->
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="controls" style="justify-content:space-between">
+        <div style="flex:1">
+          <label>Target Size <span class="small muted" id="sizeLabel">40</span>px</label>
+          <input id="targetSize" type="range" min="16" max="140" value="40">
+        </div>
+        <div style="width:120px">
+          <label>Speed</label>
+          <input id="speed" type="range" min="0.1" max="4" step="0.1" value="1">
+        </div>
+      </div>
+
+      <div style="margin-top:12px" class="settings-grid">
+        <div>
+          <label>Session Length (sec)</label>
+          <input id="sessionLen" type="number" min="5" max="600" value="60">
+        </div>
+        <div>
+          <label>Spawn Interval (ms)</label>
+          <input id="spawnMs" type="number" min="100" max="5000" value="900">
+        </div>
+      </div>
+
+      <div class="hint">Tip: Lower target size + faster spawn = harder. Use Tracking mode to practice smooth aim.</div>
+
+      <div style="margin-top:12px; display:flex; gap:8px;">
+        <button id="startBtn" class="big-btn">Start</button>
+        <button id="resetBtn" style="background:transparent;border:1px solid rgba(255,255,255,0.06);">Reset</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <div><strong>Session Stats</strong></div>
+        <div class="small muted">Space = Start/Stop</div>
+      </div>
+
+      <div style="margin-top:10px" class="stats" id="stats">
+        <div class="stat">
+          <div class="small muted">Hits</div>
+          <div id="statHits">0</div>
+        </div>
+        <div class="stat">
+          <div class="small muted">Misses</div>
+          <div id="statMisses">0</div>
+        </div>
+        <div class="stat">
+          <div class="small muted">Accuracy</div>
+          <div id="statAcc">0%</div>
+        </div>
+        <div class="stat">
+          <div class="small muted">Avg Reaction</div>
+          <div id="statReact">— ms</div>
+        </div>
+        <div class="stat">
+          <div class="small muted">Streak</div>
+          <div id="statStreak">0</div>
+        </div>
+      </div>
+
+      <div style="margin-top:10px" class="muted small">
+        <div><strong>Best Score:</strong> <span id="bestScore">—</span></div>
+        <div class="hint">Best score is saved locally (browser storage)</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div><strong>Mode Details</strong></div>
+      <div class="hint" id="modeDesc"></div>
+    </div>
+
+  </div>
+
+  <div class="canvas-wrap card" style="flex:1; padding:0; position:relative;">
+    <canvas id="gameCanvas" width="1200" height="800"></canvas>
+    <div style="position:absolute; left:12px; top:12px; display:flex; gap:8px; align-items:center;">
+      <div style="background:rgba(0,0,0,0.35); padding:8px 10px; border-radius:8px;">
+        <div id="timer" style="font-weight:700; font-size:16px;">00:00</div>
+        <div class="small muted">Time</div>
+      </div>
+      <div style="background:rgba(0,0,0,0.35); padding:8px 10px; border-radius:8px;">
+        <div id="modeLabel" style="font-weight:700;">—</div>
+        <div class="small muted">Mode</div>
+      </div>
+    </div>
+    <div style="position:absolute; right:12px; top:12px; text-align:right;">
+      <div class="small muted">Pointer: <span id="pointerInfo">—</span></div>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <div>Made for fun • No cheats • Works offline</div>
+  <div style="margin-left:auto" class="muted small">Tip: Try <strong>Tracking</strong> mode for smooth aim control</div>
+</footer>
+
+<script>
+/* =========================
+   AimLab — Full Trainer JS
+   ========================= */
+
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d', {alpha:false});
+
+let DPR = Math.max(1, window.devicePixelRatio || 1);
+function resizeCanvas(){
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = Math.floor(rect.width * DPR);
+  canvas.height = Math.floor(rect.height * DPR);
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+new ResizeObserver(resizeCanvas).observe(canvas);
+resizeCanvas();
+
+/* UI elements */
+const modes = [
+  {id:'tap', name:'Tap Targets', desc:'Random targets spawn. Tap them quickly. Good for flick & target acquisition.'},
+  {id:'timed', name:'Timed Session', desc:'Classic timed round. Hit as many as you can within the session time.'},
+  {id:'reaction', name:'Reaction Test', desc:'Screen flashes target after a random delay — measure reaction time.'},
+  {id:'tracking', name:'Tracking Trainer', desc:'A moving target you must keep your pointer on. Measures average distance.'},
+  {id:'flick', name:'Flick Shot', desc:'Targets appear briefly at random positions; you must flick to them quickly.'}
+];
+
+const modeList = document.getElementById('modeList');
+const modeDesc = document.getElementById('modeDesc');
+const modeLabel = document.getElementById('modeLabel');
+const startBtn = document.getElementById('startBtn');
+const resetBtn = document.getElementById('resetBtn');
+const sizeRange = document.getElementById('targetSize');
+const sizeLabel = document.getElementById('sizeLabel');
+const speedRange = document.getElementById('speed');
+const spawnMsInput = document.getElementById('spawnMs');
+const sessionLenInput = document.getElementById('sessionLen');
+
+const statHits = document.getElementById('statHits');
+const statMisses = document.getElementById('statMisses');
+const statAcc = document.getElementById('statAcc');
+const statReact = document.getElementById('statReact');
+const statStreak = document.getElementById('statStreak');
+const timerLabel = document.getElementById('timer');
+const pointerInfo = document.getElementById('pointerInfo');
+const bestScoreEl = document.getElementById('bestScore');
+
+let selectedMode = modes[0].id;
+
+/* Save/load best */
+const BEST_KEY = 'aimlab_best';
+function saveBest(mode, score){
+  const data = JSON.parse(localStorage.getItem(BEST_KEY) || '{}');
+  const prev = data[mode] || 0;
+  if(score > prev){ data[mode] = score; localStorage.setItem(BEST_KEY, JSON.stringify(data)); }
+}
+function loadBest(mode){
+  const data = JSON.parse(localStorage.getItem(BEST_KEY) || '{}');
+  return data[mode] || 0;
+}
+
+/* Render mode buttons */
+modes.forEach(m=>{
+  const b = document.createElement('button');
+  b.className='mode-button' + (m.id===selectedMode? ' active':'');
+  b.innerHTML = `<div style="font-weight:700">${m.name}</div><div class="small muted">${m.desc}</div>`;
+  b.addEventListener('click', ()=>{ selectMode(m.id); document.querySelectorAll('.mode-button').forEach(x=>x.classList.remove('active')); b.classList.add('active');});
+  modeList.appendChild(b);
+});
+function selectMode(id){
+  selectedMode = id;
+  const m = modes.find(x=>x.id===id);
+  modeDesc.textContent = m.desc;
+  modeLabel.textContent = m.name;
+  bestScoreEl.textContent = loadBest(id) || '—';
+}
+selectMode(selectedMode);
+
+/* Settings */
+sizeRange.addEventListener('input', ()=> sizeLabel.textContent = sizeRange.value);
+sizeLabel.textContent = sizeRange.value;
+
+/* State */
+let running = false;
+let targets = []; // active targets
+let lastSpawn = 0;
+let lastTime = performance.now();
+let hits=0, misses=0, streak=0;
+let reactionTimes = [];
+let sessionTimer = 0;
+let sessionDuration = parseFloat(sessionLenInput.value) || 60;
+let spawnInterval = parseInt(spawnMsInput.value) || 900;
+let pointer = {x:0,y:0,down:false};
+let trackingData = {sumDistance:0, samples:0};
+let flickTimeouts = [];
+let activeReactionStart = null;
+
+/* Mode-specific helpers */
+function spawnTargetRandom(){
+  const r = parseInt(sizeRange.value);
+  const padding = r+8;
+  const rect = canvas.getBoundingClientRect();
+  const x = Math.random()*(rect.width - padding*2) + padding;
+  const y = Math.random()*(rect.height - padding*2) + padding;
+  targets.push({x,y,r,created:performance.now(),type:'static'});
+}
+function spawnMovingTarget(){
+  // starts at random point with velocity
+  const r = parseInt(sizeRange.value);
+  const rect = canvas.getBoundingClientRect();
+  const x = Math.random()*(rect.width - r*2) + r;
+  const y = Math.random()*(rect.height - r*2) + r;
+  const speed = parseFloat(speedRange.value) * 60; // px per second base
+  const ang = Math.random() * Math.PI*2;
+  targets.push({x,y,r, vx:Math.cos(ang)*speed, vy:Math.sin(ang)*speed, type:'moving'});
+}
+
+/* Input (unified pointer events for mouse + touch + pen) */
+canvas.addEventListener('pointerdown', e=>{
+  pointer.down = true;
+  updatePointerFromEvent(e);
+  handlePointerDown();
+});
+window.addEventListener('pointerup', e=>{
+  pointer.down = false;
+  updatePointerFromEvent(e);
+  handlePointerUp();
+});
+canvas.addEventListener('pointermove', e=>{
+  updatePointerFromEvent(e);
+  handlePointerMove();
+});
+
+function updatePointerFromEvent(e){
+  const rect = canvas.getBoundingClientRect();
+  pointer.x = (e.clientX - rect.left);
+  pointer.y = (e.clientY - rect.top);
+  pointerInfo.textContent = `${Math.round(pointer.x)},${Math.round(pointer.y)} ${pointer.down? '●':'○'}`;
+  // prevent scrolling on touch when pointer down
+  if(pointer.down) e.preventDefault();
+}
+
+/* Core interactions */
+function handlePointerDown(){
+  if(!running) return;
+  const now = performance.now();
+  // check hit any target (topmost)
+  for(let i=targets.length-1;i>=0;i--){
+    const t = targets[i];
+    const dx = pointer.x - t.x, dy = pointer.y - t.y;
+    const dist = Math.hypot(dx,dy);
+    if(dist <= t.r){
+      // hit
+      targets.splice(i,1);
+      hits++;
+      streak++;
+      // reaction time if reaction test
+      if(selectedMode==='reaction' && activeReactionStart){
+        reactionTimes.push(now - activeReactionStart);
+        activeReactionStart = null;
+      }
+      // Save streak etc
+      updateStats();
+      return;
+    }
+  }
+  // miss
+  misses++;
+  streak=0;
+  updateStats();
+}
+
+/* pointer move used for tracking */
+function handlePointerMove(){
+  if(!running) return;
+  if(selectedMode==='tracking' && targets.length>0 && pointer.down){
+    const t = targets[0];
+    const dist = Math.hypot(pointer.x - t.x, pointer.y - t.y);
+    trackingData.sumDistance += dist;
+    trackingData.samples++;
+  }
+}
+
+/* pointer up */
+function handlePointerUp(){
+  // nothing special
+}
+
+/* Session controls */
+startBtn.addEventListener('click', ()=> toggleRun());
+resetBtn.addEventListener('click', resetAll);
+window.addEventListener('keydown', e=>{
+  if(e.code==='Space'){ e.preventDefault(); toggleRun(); }
+});
+
+function startSession(){
+  if(running) return;
+  running = true;
+  startBtn.textContent = 'Stop';
+  hits=0; misses=0; streak=0; reactionTimes=[]; trackingData={sumDistance:0,samples:0};
+  targets = [];
+  lastSpawn = performance.now();
+  sessionDuration = parseFloat(sessionLenInput.value) || 60;
+  spawnInterval = parseInt(spawnMsInput.value) || 900;
+  sessionTimer = sessionDuration;
+  updateStats();
+  activeReactionStart = null;
+  loop(performance.now());
+}
+
+function stopSession(){
+  if(!running) return;
+  running = false;
+  startBtn.textContent = 'Start';
+  // evaluate best score: for modes, define score formula
+  const score = computeScore();
+  saveBest(selectedMode, score);
+  bestScoreEl.textContent = loadBest(selectedMode) || '—';
+}
+
+function toggleRun(){ if(running) stopSession(); else startSession(); }
+
+function resetAll(){
+  stopSession();
+  hits=misses=streak=0;
+  reactionTimes=[]; trackingData={sumDistance:0,samples:0};
+  targets=[];
+  updateStats();
+}
+
+/* Score computation per mode */
+function computeScore(){
+  const acc = (hits + misses) ? (hits / (hits+misses)) : 0;
+  let base = hits;
+  if(selectedMode==='reaction'){
+    const avg = reactionTimes.length ? reactionTimes.reduce((a,b)=>a+b,0)/reactionTimes.length : 9999;
+    base = (avg>0) ? Math.max(0, 5000 - avg) : 0; // faster = larger
+  } else if(selectedMode==='tracking'){
+    const avgDist = trackingData.samples ? (trackingData.sumDistance / trackingData.samples) : 999;
+    base = Math.max(0, 1000 - avgDist);
+  } else if(selectedMode==='flick'){
+    base = hits * 2;
+  }
+  return Math.round(base * acc);
+}
+
+/* Main loop */
+function loop(now){
+  if(!running) return;
+  const dt = Math.min(64, now - lastTime) / 1000;
+  lastTime = now;
+
+  // update timer
+  sessionTimer -= dt;
+  if(sessionTimer <= 0){
+    stopSession();
+    draw(); // final draw
+    return;
+  }
+
+  // spawn logic by mode
+  if(selectedMode === 'tap' || selectedMode === 'timed'){
+    if(now - lastSpawn > spawnInterval){
+      spawnTargetRandom();
+      lastSpawn = now;
+    }
+  } else if(selectedMode === 'reaction'){
+    // reaction mode: single target after random delay
+    if(targets.length===0 && activeReactionStart===null){
+      // choose random delay between 700ms - 2500ms
+      const delay = 700 + Math.random()*1800;
+      activeReactionStart = 'scheduled';
+      setTimeout(()=>{
+        if(!running) return;
+        // spawn single target and record start
+        targets = [];
+        spawnTargetRandom();
+        activeReactionStart = performance.now();
+      }, delay);
+    }
+  } else if(selectedMode === 'tracking'){
+    // ensure one moving target
+    if(targets.length===0) spawnMovingTarget();
+  } else if(selectedMode === 'flick'){
+    // spawn brief targets
+    if(now - lastSpawn > spawnInterval){
+      const ms = parseInt(spawnMsInput.value) || 600;
+      spawnTargetRandom();
+      const id = setTimeout(()=>{ targets.shift(); }, Math.max(80, ms * 0.5));
+      flickTimeouts.push(id);
+      lastSpawn = now;
+    }
+  }
+
+  // update moving targets velocity and bounce
+  const rect = canvas.getBoundingClientRect();
+  const w = rect.width, h = rect.height;
+  targets.forEach(t=>{
+    if(t.type==='moving'){
+      t.x += (t.vx * dt) * parseFloat(speedRange.value);
+      t.y += (t.vy * dt) * parseFloat(speedRange.value);
+      // bounce edges
+      if(t.x < t.r){ t.x = t.r; t.vx *= -1; }
+      if(t.y < t.r){ t.y = t.r; t.vy *= -1; }
+      if(t.x > w - t.r){ t.x = w - t.r; t.vx *= -1; }
+      if(t.y > h - t.r){ t.y = h - t.r; t.vy *= -1; }
+    }
+  });
+
+  draw();
+  updateStats();
+  requestAnimationFrame(loop);
+}
+
+/* Draw function */
+function draw(){
+  const rect = canvas.getBoundingClientRect();
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  // background
+  ctx.fillStyle = '#07101a';
+  ctx.fillRect(0,0,rect.width,rect.height);
+
+  // draw targets
+  targets.forEach((t, idx)=>{
+    // glow
+    ctx.beginPath();
+    ctx.fillStyle = 'rgba(255,107,107,0.06)';
+    ctx.ellipse(t.x, t.y, t.r*1.8, t.r*1.8, 0, 0, Math.PI*2);
+    ctx.fill();
+
+    // ring
+    ctx.beginPath();
+    ctx.lineWidth = Math.max(2, Math.min(8, t.r*0.08));
+    ctx.strokeStyle = 'rgba(255,107,107,0.9)';
+    ctx.ellipse(t.x, t.y, t.r, t.r, 0, 0, Math.PI*2);
+    ctx.stroke();
+
+    // inner circle
+    ctx.beginPath();
+    ctx.fillStyle = 'rgba(255,255,255,0.06)';
+    ctx.ellipse(t.x, t.y, t.r*0.6, t.r*0.6, 0, 0, Math.PI*2);
+    ctx.fill();
+  });
+
+  // draw pointer feedback
+  if(pointer.x && pointer.y){
+    ctx.beginPath();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+    ctx.arc(pointer.x, pointer.y, 24, 0, Math.PI*2);
+    ctx.stroke();
+  }
+
+  // HUD timer
+  const seconds = Math.max(0, Math.floor(sessionTimer));
+  timerLabel.textContent = `${Math.floor(seconds/60).toString().padStart(2,'0')}:${(seconds%60).toString().padStart(2,'0')}`;
+}
+
+/* Update on-screen stats */
+function updateStats(){
+  statHits.textContent = String(hits);
+  statMisses.textContent = String(misses);
+  const total = hits + misses;
+  const acc = total ? Math.round((hits/total)*100) : 0;
+  statAcc.textContent = acc + '%';
+  statStreak.textContent = streak;
+  statReact.textContent = reactionTimes.length ? Math.round(reactionTimes.reduce((a,b)=>a+b,0)/reactionTimes.length) + ' ms' : '—';
+}
+
+/* Initial draw */
+draw();
+
+/* UI: react to changes */
+document.getElementById('spawnMs').addEventListener('change', ()=> spawnInterval = parseInt(spawnMsInput.value));
+document.getElementById('sessionLen').addEventListener('change', ()=> sessionDuration = parseFloat(sessionLenInput.value));
+
+/* Persist bests on unload */
+window.addEventListener('beforeunload', ()=> {
+  // nothing extra
+});
+
+/* Provide helpful default target spawn frequency depending on mode */
+function adjustSettingsForMode(){
+  if(selectedMode==='reaction'){
+    sessionLenInput.value = 20;
+    spawnMsInput.value = 700;
+    sizeRange.value = 48;
+    sizeLabel.textContent = sizeRange.value;
+  } else if(selectedMode==='tracking'){
+    sessionLenInput.value = 30;
+    spawnMsInput.value = 1000;
+    sizeRange.value = 64;
+    sizeLabel.textContent = sizeRange.value;
+  } else if(selectedMode==='flick'){
+    sessionLenInput.value = 45;
+    spawnMsInput.value = 500;
+    sizeRange.value = 28;
+    sizeLabel.textContent = sizeRange.value;
+  } else {
+    sessionLenInput.value = 60;
+    spawnMsInput.value = 900;
+    sizeRange.value = 40;
+    sizeLabel.textContent = sizeRange.value;
+  }
+}
+
+/* When mode changes in UI handlers, update selection */
+modeList.querySelectorAll('.mode-button').forEach((btn, idx) => {
+  btn.addEventListener('click', () => {
+    const id = modes[idx].id;
+    selectMode(id);
+    adjustSettingsForMode();
+  });
+});
+
+/* Ensure best shown initially */
+bestScoreEl.textContent = loadBest(selectedMode) || '—';
+
+/* Small guide: prevent gestures on mobile to keep the app responsive */
+document.addEventListener('touchmove', function(e){ if(pointer.down) e.preventDefault(); }, {passive:false});
+
+/* Accessibility: provide ARIA names */
+startBtn.setAttribute('aria-label','Start or stop the session');
+resetBtn.setAttribute('aria-label','Reset session statistics');
+
+/* Done */
+</script>
+</body>
+</html>
